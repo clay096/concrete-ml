@@ -13,6 +13,7 @@ from .quantized_ops import (
     QuantizedAbs,
     QuantizedAdd,
     QuantizedAvgPool,
+    QuantizedInstanceNormalization,
     QuantizedBatchNormalization,
     QuantizedBrevitasQuant,
     QuantizedCelu,

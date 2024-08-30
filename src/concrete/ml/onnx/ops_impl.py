@@ -1565,6 +1565,62 @@ def numpy_cast(data: numpy.ndarray, *, to: int) -> Tuple[numpy.ndarray]:
     return (data.astype(numpy.float64),)
 
 
+def numpy_instancenorm(
+    input_: numpy.ndarray,
+    scale: numpy.ndarray,
+    bias: numpy.ndarray,
+    *,
+    epsilon=1e-05
+) -> Tuple[numpy.ndarray]:
+    """Compute the instance normalization of the input tensor.
+
+    This can be expressed as:
+
+    y = scale * (x - mean) / sqrt(variance + epsilon) + B
+
+    See https://onnx.ai/onnx/operators/onnx__InstanceNormalization.html
+
+    Args:
+        input_ (numpy.ndarray): tensor to normalize, dimensions are in the form of (N,C,D1,D2,...,Dn),
+                                where N is the batch size, C is the number of channels.
+        scale (numpy.ndarray):  scale tensor of shape (C,)
+        bias (numpy.ndarray):   bias tensor of shape (C,)
+        epsilon (float):        avoids division by zero
+
+    Returns:
+        numpy.ndarray: Normalized tensor
+    """
+
+    assert_true(
+        input_.shape[1] == scale.shape[0],
+        "Number of channels in InstanceNormalization scale does not match input",
+        )
+
+    assert_true(
+        input_.shape[1] == bias.shape[0],
+        "Number of channels in InstanceNormalization bias does not match input",
+        )
+
+    batches = input_.shape[0]
+    channels = input_.shape[1]
+    height = input_.shape[2]
+    width = input_.shape[3]
+    pixels = height * width
+
+    output = numpy.zeros_like(input_)
+
+    for n in range(0, batches):
+        for c in range(0, channels):
+            single_input = input_[n, c]
+            single_mean = numpy.sum(single_input) / pixels
+            single_var = numpy.sum(numpy.square(single_input - single_mean)) / pixels
+            single_scale = scale[c]
+            single_bias = bias[c]
+            output[n, c] = (single_input - single_mean) / numpy.sqrt(single_var + epsilon) * single_scale + single_bias
+
+    return (output,)
+
+
 def numpy_batchnorm(
     x: numpy.ndarray,
     scale: numpy.ndarray,
