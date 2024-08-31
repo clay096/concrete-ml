@@ -18,6 +18,7 @@ def numpy_onnx_pad(
     pads: Tuple[int, ...],
     pad_value: Union[float, int, numpy.ndarray] = 0,
     int_only: bool = False,
+    mode: str = "constant"
 ) -> Union[numpy.ndarray, Tracer]:
     """Pad a tensor according to ONNX spec, using an optional custom pad value.
 
@@ -64,6 +65,29 @@ def numpy_onnx_pad(
         ]
 
         x_pad[tuple(indices)] = x
+
+        if mode == "reflect":
+            assert_true(ndim == 2, "Too many dimensions.")
+
+            # for b in range(0, x_pad.shape[0]):
+            #     for c in range(0, x_pad.shape[1]):
+            #
+            #         for i in range(0, pads[0]):
+            #             for j in range(pads[1], padded_shape[3] - pads[3]):
+            #                 x_pad[b, c, i, j] = x_pad[b, c, 2 * pads[0] - i, j]
+            #
+            #         for i in range(padded_shape[2] - pads[2], padded_shape[2]):
+            #             for j in range(pads[1], padded_shape[3] - pads[3]):
+            #                 x_pad[b, c, i, j] = x_pad[b, c, 2 * padded_shape[2] - 2 * pads[2] - 2 - i, j]
+            #
+            #         for i in range(0, padded_shape[2]):
+            #             for j in range(0, pads[1]):
+            #                 x_pad[b, c, i, j] = x_pad[b, c, i, 2 * pads[1] - j]
+            #
+            #         for i in range(0, padded_shape[2]):
+            #             for j in range(padded_shape[3] - pads[3], padded_shape[3]):
+            #                 x_pad[b, c, i, j] = x_pad[b, c, i,
+            #                 2 * padded_shape[3] - 2 * pads[3] - 2 - j]
 
     return x_pad
 

@@ -11,6 +11,7 @@ from brevitas.function import max_int, min_int
 from concrete.fhe import conv as fhe_conv
 from concrete.fhe import maxpool as fhe_maxpool
 from concrete.fhe import univariate
+from concrete.fhe import zeros_like as fhe_zeros_like
 from scipy import special
 from typing_extensions import SupportsIndex
 
@@ -1211,6 +1212,48 @@ def numpy_identity(
     return (x,)
 
 
+@onnx_func_raw_args("roi", "scales", "sizes", "antialias", "axes", "coordinate_transformation_mode", "cubic_coeff_a",
+                    "exclude_outside", "extrapolation_value", "keep_aspect_ratio_policy", "mode", "nearest_mode")
+def numpy_resize(
+    x: numpy.ndarray,
+    roi: Optional[numpy.ndarray] = None,
+    scales: Optional[numpy.ndarray] = None,
+    sizes: Optional[numpy.ndarray] = None,
+    *,
+    antialias=0,
+    axes = None,
+    coordinate_transformation_mode = "half_pixel",
+    cubic_coeff_a = -0.75,
+    exclude_outside = 0,
+    extrapolation_value = 0.0,
+    keep_aspect_ratio_policy = "stretch",
+    mode = "nearest",
+    nearest_mode = "round_prefer_floor"
+) -> Tuple[numpy.ndarray]:
+
+    assert_true(scales is not None and sizes is None, "Resize only supports scale vectors but not size vectors.")
+
+    assert_true(coordinate_transformation_mode == "asymmetric", "Resize only supports the asymmetric transformation mode.")
+
+    assert_true(mode == "nearest", "Resize only supports the mode.")
+
+    assert_true(nearest_mode == "floor", "Resize only supports the floor nearest mode.")
+
+    assert_true(x.ndim == 4, "Resize is currently restricted to 4 dimensional NCHW input vectors.")
+
+    assert_true(numpy.array_equal(scales, [1, 1, 2, 2]), "Resize is currently restricted to the [1, 1, 2, 2] scaling vector.")
+
+    batch_size = x.shape[0]
+    channel_count = x.shape[1]
+    height = x.shape[2]
+    width = x.shape[3]
+
+    y = numpy.concatenate((x, x), axis=2)
+    z = numpy.concatenate((y, y), axis=3)
+
+    return (z,)
+
+
 @onnx_func_raw_args("newshape", "allowzero")
 def numpy_reshape(
     x: numpy.ndarray, newshape: numpy.ndarray, *, allowzero=0
@@ -1524,9 +1567,11 @@ def numpy_pad(
         res (numpy.ndarray): Padded tensor
     """
 
-    assert_true(mode == "constant", "Padding only supported with a constant pad value")
+    assert_true(mode == "constant" or mode == "reflect", "Only constant and reflection padding are supported")
+
     assert_true(
-        constant_value is None or constant_value == 0, "Pad only accepts a constant padding with 0s"
+        mode != "constant"
+        or (constant_value is None or constant_value == 0), "Pad only accepts a constant padding with 0s"
     )
 
     # Pad the input if needed

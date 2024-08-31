@@ -42,6 +42,7 @@ from .quantized_ops import (
     QuantizedPRelu,
     QuantizedReduceSum,
     QuantizedRelu,
+    QuantizedResize,
     QuantizedReshape,
     QuantizedRound,
     QuantizedSelu,

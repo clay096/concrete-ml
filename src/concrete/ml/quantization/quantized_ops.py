@@ -673,6 +673,60 @@ class QuantizedIdentity(QuantizedOp):
         return super().q_impl(*q_inputs, **attrs)
 
 
+class QuantizedResize(QuantizedOp):
+    """Quantized Resize op."""
+
+    _impl_for_op_named: str = "Resize"
+    quantize_inputs_with_model_outputs_precision = True
+
+    def q_impl(
+        self,
+        *q_inputs: ONNXOpInputOutputType,
+        **attrs,
+    ) -> ONNXOpInputOutputType:
+        """Resize the input integer encrypted tensor.
+
+        Args:
+            q_inputs: an encrypted integer tensor at index 0
+            attrs: additional optional resize options
+
+        Returns:
+            result (QuantizedArray): resized encrypted integer tensor
+        """
+
+        prepared_inputs = self._prepare_inputs_with_constants(
+            *q_inputs, calibrate=False, quantize_actual_values=True
+        )
+
+        # This op takes only encrypted inputs in the form of QuantizedArray
+        assert isinstance(q_inputs[0], QuantizedArray)
+
+        # Return a new quantized array with the same quantization parameters
+        return QuantizedArray(
+            q_inputs[0].quantizer.n_bits,
+            self.call_impl(
+                prepared_inputs[0].qvalues,
+                prepared_inputs[1],
+                prepared_inputs[2],
+                prepared_inputs[3],
+                **attrs),
+            value_is_float=False,
+            options=prepared_inputs[0].quantizer.quant_options,
+            stats=prepared_inputs[0].quantizer.quant_stats,
+            params=prepared_inputs[0].quantizer.quant_params,
+        )
+
+    def can_fuse(self) -> bool:
+        """Determine if this op can be fused.
+
+        Resize operation can not be fused since it must be performed over integer tensors.
+
+        Returns:
+            bool: False, this operation can not be fused.
+        """
+        return False
+
+
 class QuantizedReshape(QuantizedOp):
     """Quantized Reshape op."""
 
@@ -1334,8 +1388,8 @@ class QuantizedPad(QuantizedOp):
         # Get the ONNX parameters
         self.mode = attrs.get("mode", None)
         assert_true(
-            self.mode == "constant",
-            "Padding operator only supports padding with a constant",
+            self.mode == "constant" or self.mode == "reflect",
+            f"Padding operator only supports constant and reflection padding, not {self.mode}",
         )
 
     def q_impl(
@@ -1364,11 +1418,15 @@ class QuantizedPad(QuantizedOp):
 
         assert_true(pads.size == 4, "Not currently supporting padding of 3D tensors")
 
+        data = q_input.qvalues
+        assert_true(self.mode != "reflect" or pads[0] < data.shape[2] and pads[2] < data.shape[2]
+                    and pads[1] < data.shape[3] and pads[3] < data.shape[3], "Too much padding.")
+
         pad_value = 0 if prepared_inputs[2] is None else prepared_inputs[2]
         assert_true(pad_value == 0, "Concrete ML only supports padding with constant zero values")
 
         assert q_input.quantizer.zero_point is not None
-        q_input_pad = numpy_onnx_pad(q_input.qvalues, pads, q_input.quantizer.zero_point, True)
+        q_input_pad = numpy_onnx_pad(q_input.qvalues, pads, q_input.quantizer.zero_point, True, self.mode)
 
         return QuantizedArray(
             q_input.quantizer.n_bits,
@@ -1376,7 +1434,7 @@ class QuantizedPad(QuantizedOp):
             value_is_float=False,
             options=q_input.quantizer.quant_options,
             stats=q_input.quantizer.quant_stats,
-            params=q_input.quantizer.quant_params,
+            params=q_input.quantizer.quant_params
         )
 
     def can_fuse(self) -> bool:
